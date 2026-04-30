@@ -13,7 +13,7 @@ import '../common/utils/sds011_parser.dart';
 
 import 'app_state.dart';
 
-const bool useMockData = true; // Set to true to test UI without a sensor
+const bool useMockData = false; // Set to true to test UI without a sensor
 
 final sensorRepositoryProvider = Provider<SensorRepository>((ref) {
   final SensorRepository repo;

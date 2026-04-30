@@ -9,6 +9,7 @@ class DesktopSensorRepository implements SensorRepository {
   SerialPort? _port;
   StreamController<Uint8List>? _controller;
   StreamSubscription<Uint8List>? _subscription;
+  SerialPortReader? _reader;
 
   @override
   Stream<Uint8List> get rawDataStream {
@@ -25,18 +26,20 @@ class DesktopSensorRepository implements SensorRepository {
 
     try {
       _port = SerialPort(portName);
-      if (!_port!.openRead()) {
-        throw SerialPortError("Failed to open port for reading.");
+      if (!_port!.openReadWrite()) {
+        throw SerialPortError("Failed to open port for reading and writing.");
       }
-      _port!.config = SerialPortConfig()
-        ..baudRate = 9600
-        ..bits = 8
-        ..parity = SerialPortParity.none
-        ..stopBits = 1;
+
+      final config = _port!.config;
+      config.baudRate = 9600;
+      config.bits = 8;
+      config.parity = SerialPortParity.none;
+      config.stopBits = 1;
+      _port!.config = config;
 
       _controller ??= StreamController<Uint8List>.broadcast();
-      final reader = SerialPortReader(_port!);
-      _subscription = reader.stream.listen((data) {
+      _reader = SerialPortReader(_port!);
+      _subscription = _reader!.stream.listen((data) {
         _controller?.add(data);
       });
     } on SerialPortError catch (e) {
@@ -50,8 +53,14 @@ class DesktopSensorRepository implements SensorRepository {
   Future<void> disconnect() async {
     await _subscription?.cancel();
     _subscription = null;
+    _reader?.close();
+    _reader = null;
+
     try {
-      _port?.close();
+      if (_port != null && _port!.isOpen) {
+        _port!.close();
+      }
+      _port?.dispose();
     } catch (e) {
       // Ignore errors on close
     }
