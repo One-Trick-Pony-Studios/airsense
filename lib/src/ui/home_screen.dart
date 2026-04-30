@@ -22,12 +22,17 @@ class HomeScreen extends StatelessWidget {
               return const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ControlPanel(),
+                  SizedBox(
+                    width: 320, // Constrain width so it doesn't expand infinitely
+                    child: SingleChildScrollView(child: ControlPanel()),
+                  ),
                   Expanded(
-                    flex: 2,
                     child: Column(
                       children: [
-                        CurrentReadings(),
+                        Padding(
+                          padding: EdgeInsets.only(bottom: 8.0),
+                          child: CurrentReadings(),
+                        ),
                         Expanded(child: SensorDataChart()),
                       ],
                     ),
@@ -36,11 +41,14 @@ class HomeScreen extends StatelessWidget {
               );
             } else {
               // Narrow layout
-              return const Column(
+              return ListView(
                 children: [
                   ControlPanel(),
-                  CurrentReadings(),
-                  Expanded(child: SensorDataChart()),
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8.0),
+                    child: CurrentReadings(),
+                  ),
+                  SizedBox(height: 300, child: SensorDataChart()),
                 ],
               );
             }

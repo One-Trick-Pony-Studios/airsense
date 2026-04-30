@@ -7,7 +7,7 @@ abstract class SensorRepository {
 
   Future<void> disconnect();
 
-  List<String> getAvailablePorts();
+  Future<List<String>> getAvailablePorts();
 
   void dispose();
 }

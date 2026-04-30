@@ -33,7 +33,7 @@ class MockSensorRepository implements SensorRepository {
   }
 
   @override
-  List<String> getAvailablePorts() {
+  Future<List<String>> getAvailablePorts() async {
     return ['/dev/mock_tty1', '/dev/mock_tty2', 'COM_MOCK'];
   }
 

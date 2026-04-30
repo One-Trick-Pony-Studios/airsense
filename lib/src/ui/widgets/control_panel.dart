@@ -8,7 +8,7 @@ class ControlPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final availablePorts = ref.watch(availablePortsProvider);
+    final availablePortsAsync = ref.watch(availablePortsProvider);
     final appState = ref.watch(sensorStateProvider);
     final notifier = ref.read(sensorStateProvider.notifier);
 
@@ -38,23 +38,50 @@ class ControlPanel extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 8),
-            DropdownButton<String>(
-              hint: const Text('Select Port'),
-              value: appState.isConnected ? appState.connectedPort : null,
-              isExpanded: true,
-              items: availablePorts.map((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value),
-                );
-              }).toList(),
-              onChanged: appState.isConnected
-                  ? null
-                  : (port) {
-                      if (port != null) {
-                        notifier.connect(port);
-                      }
-                    },
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButton<String>(
+                    hint: const Text('Select Port'),
+                    value: appState.isConnected ? appState.connectedPort : null,
+                    isExpanded: true,
+                    items: availablePortsAsync.maybeWhen(
+                      data: (ports) {
+                        final list = ports.toList();
+                        // Prevent assertion error if connected port is somehow missing
+                        if (appState.connectedPort != null && !list.contains(appState.connectedPort)) {
+                          list.add(appState.connectedPort!);
+                        }
+                        return list.map((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          );
+                        }).toList();
+                      },
+                      orElse: () {
+                        // Provide the current value while loading to prevent assertion crash
+                        if (appState.connectedPort != null) {
+                          return [DropdownMenuItem(value: appState.connectedPort, child: Text(appState.connectedPort!))];
+                        }
+                        return [];
+                      },
+                    ),
+                    onChanged: appState.isConnected
+                        ? null
+                        : (port) {
+                            if (port != null) {
+                              notifier.connect(port);
+                            }
+                          },
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () => ref.invalidate(availablePortsProvider),
+                  tooltip: 'Refresh Ports',
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             ElevatedButton(

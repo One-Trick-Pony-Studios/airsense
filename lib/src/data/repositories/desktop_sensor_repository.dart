@@ -59,7 +59,7 @@ class DesktopSensorRepository implements SensorRepository {
   }
 
   @override
-  List<String> getAvailablePorts() {
+  Future<List<String>> getAvailablePorts() async {
     return SerialPort.availablePorts;
   }
 

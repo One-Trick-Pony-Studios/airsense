@@ -6,21 +6,29 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/repositories/desktop_sensor_repository.dart';
 import '../data/repositories/mock_sensor_repository.dart';
+import '../data/repositories/mobile_sensor_repository.dart';
 import '../data/repositories/sensor_repository.dart';
 import '../domain/sensor_data.dart';
 import '../common/utils/sds011_parser.dart';
 
 import 'app_state.dart';
 
-const bool useMockData = true; // Set to false to use real sensor
+const bool useMockData = true; // Set to true to test UI without a sensor
 
 final sensorRepositoryProvider = Provider<SensorRepository>((ref) {
-  final repo = useMockData ? MockSensorRepository() : DesktopSensorRepository();
+  final SensorRepository repo;
+  if (useMockData) {
+    repo = MockSensorRepository();
+  } else if (!kIsWeb && Platform.isAndroid) {
+    repo = MobileSensorRepository();
+  } else {
+    repo = DesktopSensorRepository();
+  }
   ref.onDispose(() => repo.dispose());
   return repo;
 });
 
-final availablePortsProvider = Provider<List<String>>((ref) {
+final availablePortsProvider = FutureProvider<List<String>>((ref) async {
   return ref.watch(sensorRepositoryProvider).getAvailablePorts();
 });
 
