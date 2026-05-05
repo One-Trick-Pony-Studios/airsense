@@ -14,10 +14,13 @@ void main() async {
     await windowManager.ensureInitialized();
 
     WindowOptions windowOptions = const WindowOptions(
-      size: Size(500, 400),
-      minimumSize: Size(350, 300),
+      size: Size(450, 650), // Compact widget size
+      minimumSize: Size(350, 500),
       center: true,
       title: 'AirSense',
+      titleBarStyle: TitleBarStyle.hidden, // Hides the OS borders
+      alwaysOnTop: true,                   // Starts on top by default
+      backgroundColor: Colors.transparent,
     );
     windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();

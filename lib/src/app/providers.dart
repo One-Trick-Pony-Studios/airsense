@@ -100,9 +100,10 @@ class SensorStateNotifier extends Notifier<AppState> {
   }
 
   Future<void> _startRecording() async {
+    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
     String? outputFile = await FilePicker.saveFile(
       dialogTitle: 'Please select an output file:',
-      fileName: 'sds011-log-${DateTime.now().toIso8601String()}.csv',
+      fileName: 'sds011-log-$timestamp.csv',
       allowedExtensions: ['csv'],
     );
 
