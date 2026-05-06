@@ -50,6 +50,19 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+  msix: ^3.16.13
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "airsense.png"
+  windows:
+    generate: true
+    image_path: "airsense.png"
+  linux:
+    generate: true
+    image_path: "airsense.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -92,3 +105,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+msix_config:
+  display_name: AirSense
+  publisher_display_name: One Trick Pony Studios
+  identity_name: me.bhaad.airsense
+  msix_version: 1.0.0.0
+  logo_path: airsense.png

@@ -14,25 +14,27 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool _isAlwaysOnTop = false;
+  bool _isAlwaysOnBottom = true;
 
   @override
   void initState() {
     super.initState();
-    _checkAlwaysOnTop();
+    _checkAlwaysOnBottom();
   }
 
-  Future<void> _checkAlwaysOnTop() async {
+  Future<void> _checkAlwaysOnBottom() async {
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      bool isPinned = await windowManager.isAlwaysOnTop();
-      if (mounted) setState(() => _isAlwaysOnTop = isPinned);
+      bool isPinned = await windowManager.isAlwaysOnBottom();
+      if (mounted) setState(() => _isAlwaysOnBottom = isPinned);
     }
   }
 
-  Future<void> _toggleAlwaysOnTop() async {
+  Future<void> _toggleAlwaysOnBottom() async {
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      await windowManager.setAlwaysOnTop(!_isAlwaysOnTop);
-      if (mounted) setState(() => _isAlwaysOnTop = !_isAlwaysOnTop);
+      bool nextState = !_isAlwaysOnBottom;
+      await windowManager.setAlwaysOnBottom(nextState);
+      await windowManager.setSkipTaskbar(nextState); // Bring back to taskbar when detached!
+      if (mounted) setState(() => _isAlwaysOnBottom = nextState);
     }
   }
 
@@ -48,15 +50,9 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS))
             IconButton(
-              icon: Icon(_isAlwaysOnTop ? Icons.push_pin : Icons.push_pin_outlined),
-              tooltip: _isAlwaysOnTop ? 'Unpin window' : 'Pin to top',
-              onPressed: _toggleAlwaysOnTop,
-            ),
-          if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS))
-            IconButton(
-              icon: const Icon(Icons.minimize),
-              tooltip: 'Minimize',
-              onPressed: () async => await windowManager.minimize(),
+              icon: Icon(_isAlwaysOnBottom ? Icons.layers_clear : Icons.layers),
+              tooltip: _isAlwaysOnBottom ? 'Detach from desktop' : 'Pin to desktop',
+              onPressed: _toggleAlwaysOnBottom,
             ),
           if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS))
             IconButton(

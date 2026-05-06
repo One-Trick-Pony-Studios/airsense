@@ -19,10 +19,11 @@ void main() async {
       center: true,
       title: 'AirSense',
       titleBarStyle: TitleBarStyle.hidden, // Hides the OS borders
-      alwaysOnTop: true,                   // Starts on top by default
       backgroundColor: Colors.transparent,
+      skipTaskbar: true,                   // Removes it from the taskbar
     );
     windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.setAlwaysOnBottom(true); // Pins it to the desktop background
       await windowManager.show();
       await windowManager.focus();
     });
