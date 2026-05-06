@@ -35,9 +35,15 @@ class DesktopSensorRepository implements SensorRepository {
       config.bits = 8;
       config.parity = SerialPortParity.none;
       config.stopBits = 1;
+      
+      // Explicitly disable flow control. Linux TTY devices often default to 
+      // hardware flow control (CRTSCTS) enabled, which blocks RX on SDS011 sensors.
+      config.setFlowControl(SerialPortFlowControl.none);
+      
       _port!.config = config;
 
       _controller ??= StreamController<Uint8List>.broadcast();
+      
       _reader = SerialPortReader(_port!);
       _subscription = _reader!.stream.listen((data) {
         _controller?.add(data);
@@ -51,18 +57,25 @@ class DesktopSensorRepository implements SensorRepository {
 
   @override
   Future<void> disconnect() async {
-    await _subscription?.cancel();
-    _subscription = null;
+    _disconnectSync();
+  }
+
+  /// Synchronously disconnects and cleans up resources.
+  /// This is safe to call from `dispose()`.
+  void _disconnectSync() {
+    // The subscription is on the reader's stream. Closing the reader
+    // kills its isolate and closes its stream, which is sufficient to stop
+    // the flow of data and terminate the subscription.
     _reader?.close();
     _reader = null;
+    _subscription = null;
 
     try {
       if (_port != null && _port!.isOpen) {
         _port!.close();
       }
-      _port?.dispose();
     } catch (e) {
-      // Ignore errors on close
+      debugPrint("Error on port close: $e");
     }
     _port = null;
   }
@@ -74,7 +87,8 @@ class DesktopSensorRepository implements SensorRepository {
 
   @override
   void dispose() {
-    disconnect();
+    _disconnectSync();
     _controller?.close();
+    _controller = null;
   }
 }
