@@ -7,6 +7,7 @@ import '../app/providers.dart';
 import './widgets/control_panel.dart';
 import './widgets/current_reading_card.dart';
 import './widgets/sensor_data_chart.dart';
+import './history_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -52,6 +53,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: const Text('AirSense'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'Recordings',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const HistoryScreen()),
+            ),
+          ),
           if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS))
             IconButton(
               icon: Icon(_isAlwaysOnBottom ? Icons.layers_clear : Icons.layers),

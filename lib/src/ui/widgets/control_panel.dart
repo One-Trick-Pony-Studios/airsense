@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:airsense/src/app/providers.dart';
 import 'package:airsense/src/common/utils/chart_exporter.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:io';
 
 class ControlPanel extends ConsumerWidget {
   const ControlPanel({super.key});
@@ -90,6 +93,14 @@ class ControlPanel extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             const Divider(),
+            SwitchListTile(
+              title: const Text('Track Location'),
+              subtitle: const Text('Adds GPS coords to data'),
+              value: appState.locationEnabled,
+              onChanged: (val) => notifier.toggleLocation(),
+              contentPadding: EdgeInsets.zero,
+            ),
+            const SizedBox(height: 8),
             ElevatedButton.icon(
               onPressed: !appState.isConnected ? null : notifier.toggleRecording,
               icon: Icon(appState.isRecording ? Icons.stop : Icons.circle),
@@ -109,14 +120,42 @@ class ControlPanel extends ConsumerWidget {
                           await ChartExporter.exportToPng(
                               appState.activeRecordFilePath!);
                           if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Chart exported to PNG.')),
-                          );
+                          
+                          if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Chart generated. Use Share to export.')),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Chart exported to PNG.')),
+                            );
+                          }
                         },
               icon: const Icon(Icons.image),
               label: const Text('Export Plot as PNG'),
             ),
+            if (!kIsWeb &&
+                (Platform.isAndroid || Platform.isIOS) &&
+                appState.activeRecordFilePath != null) ...[
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: appState.isRecording
+                    ? null
+                    : () async {
+                        final filePath = appState.activeRecordFilePath!;
+                        final file = File(filePath);
+                        if (await file.exists()) {
+                          await SharePlus.instance.share(ShareParams(
+                              files: [XFile(filePath)],
+                              text: 'AirSense Data Export'));
+                        }
+                      },
+                icon: const Icon(Icons.share),
+                label: const Text('Share and Export'),
+              ),
+            ],
           ],
         ),
       ),

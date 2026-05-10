@@ -8,7 +8,6 @@ import 'sensor_repository.dart';
 class DesktopSensorRepository implements SensorRepository {
   SerialPort? _port;
   StreamController<Uint8List>? _controller;
-  StreamSubscription<Uint8List>? _subscription;
   SerialPortReader? _reader;
 
   @override
@@ -45,7 +44,7 @@ class DesktopSensorRepository implements SensorRepository {
       _controller ??= StreamController<Uint8List>.broadcast();
       
       _reader = SerialPortReader(_port!);
-      _subscription = _reader!.stream.listen((data) {
+      _reader!.stream.listen((data) {
         _controller?.add(data);
       });
     } on SerialPortError catch (e) {
@@ -68,7 +67,6 @@ class DesktopSensorRepository implements SensorRepository {
     // the flow of data and terminate the subscription.
     _reader?.close();
     _reader = null;
-    _subscription = null;
 
     try {
       if (_port != null && _port!.isOpen) {

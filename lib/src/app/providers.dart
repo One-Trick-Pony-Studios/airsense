@@ -4,6 +4,10 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import '../data/repositories/desktop_sensor_repository.dart';
 import '../data/repositories/mock_sensor_repository.dart';
 import '../data/repositories/mobile_sensor_repository.dart';
@@ -46,9 +50,9 @@ class SensorStateNotifier extends Notifier<AppState> {
   @override
   AppState build() {
     ref.listen<AsyncValue<SensorData>>(parsedSensorStreamProvider,
-        (previous, next) {
+        (previous, next) async {
       if (next.hasValue && next.value != null) {
-        _onNewSensorData(next.value!);
+        await _onNewSensorData(next.value!);
       }
     });
 
@@ -59,21 +63,38 @@ class SensorStateNotifier extends Notifier<AppState> {
     return const AppState();
   }
 
-  void _onNewSensorData(SensorData data) {
+  Future<void> _onNewSensorData(SensorData data) async {
+    SensorData updatedData = data;
+    if (state.isRecording &&
+        state.recordingLat != null &&
+        state.recordingLon != null) {
+      updatedData = SensorData(
+        pm25: data.pm25,
+        pm10: data.pm10,
+        timestamp: data.timestamp,
+        latitude: state.recordingLat,
+        longitude: state.recordingLon,
+        locationName: state.recordingLocationName,
+      );
+    }
+
     final newBuffer = List<SensorData>.from(state.uiRingBuffer);
     if (newBuffer.length >= 300) {
       newBuffer.removeAt(0);
     }
-    newBuffer.add(data);
+    newBuffer.add(updatedData);
 
     state = state.copyWith(
-      currentReading: data,
+      currentReading: updatedData,
       uiRingBuffer: newBuffer,
     );
 
     if (state.isRecording) {
-      _fileSink
-          ?.writeln('${data.timestamp.toIso8601String()},${data.pm25},${data.pm10}');
+      final lat = updatedData.latitude?.toString() ?? '';
+      final lon = updatedData.longitude?.toString() ?? '';
+      final loc = updatedData.locationName ?? '';
+      _fileSink?.writeln(
+          '${updatedData.timestamp.toIso8601String()},${updatedData.pm25},${updatedData.pm10},$lat,$lon,$loc');
     }
   }
 
@@ -104,6 +125,31 @@ class SensorStateNotifier extends Notifier<AppState> {
     state = state.copyWith(clearError: true);
   }
 
+  Future<void> toggleLocation() async {
+    if (state.locationEnabled) {
+      state = state.copyWith(locationEnabled: false);
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        state = state.copyWith(errorMessage: 'Location permissions are denied');
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      state = state.copyWith(
+          errorMessage:
+              'Location permissions are permanently denied, we cannot request permissions.');
+      return;
+    }
+
+    state = state.copyWith(locationEnabled: true, clearError: true);
+  }
+
   Future<void> toggleRecording() async {
     if (state.isRecording) {
       await _stopRecording();
@@ -114,22 +160,72 @@ class SensorStateNotifier extends Notifier<AppState> {
 
   Future<void> _startRecording() async {
     final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-    String? outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Please select an output file:',
-      fileName: 'sds011-log-$timestamp.csv',
-      allowedExtensions: ['csv'],
-    );
+    final fileName = 'sds011-log-$timestamp.csv';
+    String? outputFile;
+
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      // Use internal app documents directory for maximum reliability on mobile
+      final directory = await getApplicationDocumentsDirectory();
+      outputFile = p.join(directory.path, fileName);
+    } else {
+      outputFile = await FilePicker.saveFile(
+        dialogTitle: 'Please select an output file:',
+        fileName: fileName,
+        allowedExtensions: ['csv'],
+      );
+    }
 
     if (outputFile != null) {
+      double? lat;
+      double? lon;
+      String? locationName;
+
+      if (state.locationEnabled) {
+        try {
+          final position = await Geolocator.getCurrentPosition(
+              locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 5),
+          ));
+          lat = position.latitude;
+          lon = position.longitude;
+
+          // Reverse geocode to get a human-readable name
+          try {
+            List<Placemark> placemarks =
+                await placemarkFromCoordinates(lat, lon)
+                    .timeout(const Duration(seconds: 3));
+            if (placemarks.isNotEmpty) {
+              final place = placemarks.first;
+              locationName = "${place.street}, ${place.locality}";
+            }
+          } catch (e) {
+            debugPrint('Error reverse geocoding: $e');
+            locationName = "Unknown Location";
+          }
+        } catch (e) {
+          debugPrint('Error getting starting location: $e');
+        }
+      }
+
       try {
         final file = File(outputFile);
         _fileSink = file.openWrite();
-        _fileSink?.writeln('timestamp,pm25,pm10'); // Write header
-        state =
-            state.copyWith(isRecording: true, activeRecordFilePath: outputFile);
+        _fileSink?.writeln(
+            'timestamp,pm25,pm10,latitude,longitude,location_name'); // Write header
+        state = state.copyWith(
+          isRecording: true,
+          activeRecordFilePath: outputFile,
+          recordingLat: lat,
+          recordingLon: lon,
+          recordingLocationName: locationName,
+          clearError: true,
+        );
       } catch (e) {
-        debugPrint('Error starting recording: $e');
-        // Optionally, show an error to the user
+        state = state.copyWith(
+          errorMessage: 'Failed to create file: $e',
+          isRecording: false,
+        );
       }
     }
   }
@@ -138,6 +234,9 @@ class SensorStateNotifier extends Notifier<AppState> {
     await _fileSink?.flush();
     await _fileSink?.close();
     _fileSink = null;
-    state = state.copyWith(isRecording: false);
+    state = state.copyWith(
+      isRecording: false,
+      clearRecordingLocation: true,
+    );
   }
 }

@@ -1,8 +1,11 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:airsense/src/domain/sensor_data.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 class ChartExporter {
   static Future<void> exportToPng(String csvPath) async {
@@ -21,11 +24,18 @@ class ChartExporter {
     final List<SensorData> data = [];
     for (var i = 1; i < lines.length; i++) {
       final parts = lines[i].split(',');
-      if (parts.length == 3) {
+      if (parts.length >= 3) {
         data.add(SensorData(
           timestamp: DateTime.parse(parts[0]),
           pm25: double.parse(parts[1]),
           pm10: double.parse(parts[2]),
+          latitude: parts.length >= 4 && parts[3].isNotEmpty
+              ? double.tryParse(parts[3])
+              : null,
+          longitude: parts.length >= 5 && parts[4].isNotEmpty
+              ? double.tryParse(parts[4])
+              : null,
+          locationName: parts.length >= 6 && parts[5].isNotEmpty ? parts[5] : null,
         ));
       }
     }
@@ -52,11 +62,20 @@ class ChartExporter {
     final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
     final pngBytes = byteData!.buffer.asUint8List();
 
-    String? outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Save PNG Export',
-      fileName: 'chart-export.png',
-      allowedExtensions: ['png'],
-    );
+    final fileName =
+        'chart-export-${DateTime.now().millisecondsSinceEpoch}.png';
+    String? outputFile;
+
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      final directory = await getApplicationDocumentsDirectory();
+      outputFile = p.join(directory.path, fileName);
+    } else {
+      outputFile = await FilePicker.saveFile(
+        dialogTitle: 'Save PNG Export',
+        fileName: fileName,
+        allowedExtensions: ['png'],
+      );
+    }
 
     if (outputFile != null) {
       await File(outputFile).writeAsBytes(pngBytes);
@@ -155,6 +174,22 @@ class ChartExporter {
 
     // Draw Legend
     _drawLegend(canvas, margin, margin, textPainter);
+
+    // Draw Location if available
+    final firstWithLocation = data.firstWhere(
+        (d) => d.latitude != null && d.longitude != null,
+        orElse: () => data.first);
+    if (firstWithLocation.latitude != null) {
+      final locStr = firstWithLocation.locationName ??
+          "Location: ${firstWithLocation.latitude!.toStringAsFixed(4)}, ${firstWithLocation.longitude!.toStringAsFixed(4)}";
+      textPainter.text = TextSpan(
+        text: locStr,
+        style: const TextStyle(color: Colors.black, fontSize: 32),
+      );
+      textPainter.layout();
+      textPainter.paint(
+          canvas, Offset(size.width - textPainter.width - margin, margin - 50));
+    }
   }
 
   static void _drawLegend(
