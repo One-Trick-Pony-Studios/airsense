@@ -78,8 +78,16 @@ class SensorStateNotifier extends Notifier<AppState> {
   }
 
   Future<void> connect(String port) async {
-    await ref.read(sensorRepositoryProvider).connect(port);
-    state = state.copyWith(isConnected: true, connectedPort: port);
+    state = state.copyWith(clearError: true); // Reset error on new attempt
+    try {
+      await ref.read(sensorRepositoryProvider).connect(port);
+      state = state.copyWith(isConnected: true, connectedPort: port);
+    } catch (e) {
+      state = state.copyWith(
+        isConnected: false,
+        errorMessage: e.toString(),
+      );
+    }
   }
 
   Future<void> disconnect() async {
@@ -88,7 +96,12 @@ class SensorStateNotifier extends Notifier<AppState> {
       isConnected: false,
       clearConnectedPort: true,
       currentReading: null,
+      clearError: true,
     );
+  }
+
+  void clearError() {
+    state = state.copyWith(clearError: true);
   }
 
   Future<void> toggleRecording() async {

@@ -11,6 +11,7 @@ class AppState {
     this.activeRecordFilePath,
     this.isConnected = false,
     this.connectedPort,
+    this.errorMessage,
   });
 
   final SensorData? currentReading;
@@ -19,6 +20,7 @@ class AppState {
   final String? activeRecordFilePath;
   final bool isConnected;
   final String? connectedPort;
+  final String? errorMessage;
 
   AppState copyWith({
     SensorData? currentReading,
@@ -27,16 +29,21 @@ class AppState {
     String? activeRecordFilePath,
     bool? isConnected,
     String? connectedPort,
+    String? errorMessage,
     bool clearRecordFile = false,
     bool clearConnectedPort = false,
+    bool clearError = false,
   }) {
     return AppState(
       currentReading: currentReading ?? this.currentReading,
       uiRingBuffer: uiRingBuffer ?? this.uiRingBuffer,
       isRecording: isRecording ?? this.isRecording,
-      activeRecordFilePath: clearRecordFile ? null : activeRecordFilePath ?? this.activeRecordFilePath,
+      activeRecordFilePath:
+          clearRecordFile ? null : activeRecordFilePath ?? this.activeRecordFilePath,
       isConnected: isConnected ?? this.isConnected,
-      connectedPort: clearConnectedPort ? null : connectedPort ?? this.connectedPort,
+      connectedPort:
+          clearConnectedPort ? null : connectedPort ?? this.connectedPort,
+      errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     );
   }
 }

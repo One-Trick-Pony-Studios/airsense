@@ -65,7 +65,7 @@ class ChartExporter {
 
   static void _drawChartOnCanvas(
       Canvas canvas, Size size, List<SensorData> data) {
-    // Basic chart drawing logic. This can be made much more sophisticated.
+    // Basic chart drawing logic.
     final paintPm25 = Paint()
       ..color = Colors.blue
       ..strokeWidth = 3
@@ -83,11 +83,11 @@ class ChartExporter {
       return currentMax > max ? currentMax : max;
     });
 
-    final margin = 80.0;
+    final margin = 120.0; // Increased margin for labels
     final chartWidth = size.width - (2 * margin);
     final chartHeight = size.height - (2 * margin);
 
-    // Draw grid and labels
+    // Draw grid and Y labels
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     for (int i = 0; i <= 10; i++) {
       final y = margin + chartHeight - (i / 10.0) * chartHeight;
@@ -95,14 +95,40 @@ class ChartExporter {
           Offset(margin, y), Offset(margin + chartWidth, y), gridPaint);
       textPainter.text = TextSpan(
         text: ((i / 10.0) * maxVal).toStringAsFixed(0),
-        style: const TextStyle(color: Colors.black, fontSize: 24),
+        style: const TextStyle(color: Colors.black, fontSize: 32),
       );
       textPainter.layout();
       textPainter.paint(
-          canvas, Offset(margin - textPainter.width - 10, y - textPainter.height / 2));
+          canvas,
+          Offset(margin - textPainter.width - 20, y - textPainter.height / 2));
     }
 
-    // Draw paths
+    // Draw X labels (Timestamps)
+    final int labelCount = 10;
+    for (int i = 0; i < labelCount; i++) {
+      final dataIndex = (i * (data.length - 1) / (labelCount - 1)).round();
+      if (dataIndex >= data.length) continue;
+
+      final x = margin + (dataIndex / (data.length - 1)) * chartWidth;
+      final timestamp = data[dataIndex].timestamp;
+      final timeStr =
+          "${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}";
+
+      textPainter.text = TextSpan(
+        text: timeStr,
+        style: const TextStyle(color: Colors.black, fontSize: 24),
+      );
+      textPainter.layout();
+
+      // Save canvas state, rotate for vertical labels
+      canvas.save();
+      canvas.translate(x, margin + chartHeight + 20);
+      canvas.rotate(1.5708); // 90 degrees in radians
+      textPainter.paint(canvas, Offset.zero);
+      canvas.restore();
+    }
+
+    // Draw Paths
     final pathPm25 = Path();
     final pathPm10 = Path();
 
@@ -126,5 +152,42 @@ class ChartExporter {
 
     canvas.drawPath(pathPm25, paintPm25);
     canvas.drawPath(pathPm10, paintPm10);
+
+    // Draw Legend
+    _drawLegend(canvas, margin, margin, textPainter);
+  }
+
+  static void _drawLegend(
+      Canvas canvas, double left, double top, TextPainter textPainter) {
+    const legendOffset = 50.0;
+    const boxSize = 30.0;
+    const spacing = 150.0;
+
+    // PM2.5 Legend
+    final paintPm25 = Paint()..color = Colors.blue;
+    canvas.drawRect(
+        Rect.fromLTWH(left + 20, top - legendOffset, boxSize, boxSize),
+        paintPm25);
+    textPainter.text = const TextSpan(
+      text: "PM2.5",
+      style: TextStyle(color: Colors.black, fontSize: 32),
+    );
+    textPainter.layout();
+    textPainter.paint(
+        canvas, Offset(left + 20 + boxSize + 10, top - legendOffset));
+
+    // PM10 Legend
+    final paintPm10 = Paint()..color = Colors.red;
+    canvas.drawRect(
+        Rect.fromLTWH(
+            left + 20 + spacing, top - legendOffset, boxSize, boxSize),
+        paintPm10);
+    textPainter.text = const TextSpan(
+      text: "PM10",
+      style: TextStyle(color: Colors.black, fontSize: 32),
+    );
+    textPainter.layout();
+    textPainter.paint(
+        canvas, Offset(left + 20 + spacing + boxSize + 10, top - legendOffset));
   }
 }

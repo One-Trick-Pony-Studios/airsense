@@ -1,19 +1,21 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+import '../app/providers.dart';
 import './widgets/control_panel.dart';
 import './widgets/current_reading_card.dart';
 import './widgets/sensor_data_chart.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isAlwaysOnBottom = true;
 
   @override
@@ -40,6 +42,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final errorMessage = ref.watch(sensorStateProvider.select((s) => s.errorMessage));
+
     return Scaffold(
       appBar: AppBar(
         flexibleSpace: (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) 
@@ -62,47 +66,64 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth > 600) {
-              // Wide layout
-              return const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 320, // Constrain width so it doesn't expand infinitely
-                    child: SingleChildScrollView(child: ControlPanel()),
-                  ),
-                  Expanded(
-                    child: Column(
+      body: Column(
+        children: [
+          if (errorMessage != null)
+            MaterialBanner(
+              content: Text(errorMessage),
+              backgroundColor: Theme.of(context).colorScheme.errorContainer,
+              actions: [
+                TextButton(
+                  onPressed: () => ref.read(sensorStateProvider.notifier).clearError(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth > 600) {
+                    // Wide layout
+                    return const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        SizedBox(
+                          width: 320, // Constrain width so it doesn't expand infinitely
+                          child: SingleChildScrollView(child: ControlPanel()),
+                        ),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              Padding(
+                                padding: EdgeInsets.only(bottom: 8.0),
+                                child: CurrentReadings(),
+                              ),
+                              Expanded(child: SensorDataChart()),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  } else {
+                    // Narrow layout
+                    return ListView(
+                      children: [
+                        ControlPanel(),
                         Padding(
-                          padding: EdgeInsets.only(bottom: 8.0),
+                          padding: EdgeInsets.symmetric(vertical: 8.0),
                           child: CurrentReadings(),
                         ),
-                        Expanded(child: SensorDataChart()),
+                        SizedBox(height: 300, child: SensorDataChart()),
                       ],
-                    ),
-                  ),
-                ],
-              );
-            } else {
-              // Narrow layout
-              return ListView(
-                children: [
-                  ControlPanel(),
-                  Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8.0),
-                    child: CurrentReadings(),
-                  ),
-                  SizedBox(height: 300, child: SensorDataChart()),
-                ],
-              );
-            }
-          },
-        ),
+                    );
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
