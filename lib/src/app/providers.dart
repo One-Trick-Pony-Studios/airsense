@@ -197,7 +197,39 @@ class SensorStateNotifier extends Notifier<AppState> {
                     .timeout(const Duration(seconds: 3));
             if (placemarks.isNotEmpty) {
               final place = placemarks.first;
-              locationName = "${place.street}, ${place.locality}";
+              final List<String> addressParts = [];
+
+              if (place.subLocality != null && place.subLocality!.isNotEmpty) {
+                addressParts.add(place.subLocality!);
+              }
+
+              if (place.locality != null && place.locality!.isNotEmpty) {
+                if (!addressParts.contains(place.locality)) {
+                  addressParts.add(place.locality!);
+                }
+              }
+
+              if (addressParts.length < 2 &&
+                  place.subAdministrativeArea != null &&
+                  place.subAdministrativeArea!.isNotEmpty) {
+                if (!addressParts.contains(place.subAdministrativeArea)) {
+                  addressParts.add(place.subAdministrativeArea!);
+                }
+              }
+
+              if (addressParts.length < 2 &&
+                  place.administrativeArea != null &&
+                  place.administrativeArea!.isNotEmpty) {
+                if (!addressParts.contains(place.administrativeArea)) {
+                  addressParts.add(place.administrativeArea!);
+                }
+              }
+
+              if (addressParts.isEmpty) {
+                locationName = place.street ?? "Unknown Location";
+              } else {
+                locationName = addressParts.join(", ");
+              }
             }
           } catch (e) {
             debugPrint('Error reverse geocoding: $e');
