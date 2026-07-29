@@ -64,21 +64,20 @@ class ChartExporter {
 
     final fileName =
         'chart-export-${DateTime.now().millisecondsSinceEpoch}.png';
-    String? outputFile;
 
     if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      // Mobile: write directly to app documents directory
       final directory = await getApplicationDocumentsDirectory();
-      outputFile = p.join(directory.path, fileName);
+      final outputFile = p.join(directory.path, fileName);
+      await File(outputFile).writeAsBytes(pngBytes);
     } else {
-      outputFile = await FilePicker.saveFile(
+      // Desktop/web: file_picker 12+ takes bytes and handles writing
+      await FilePicker.saveFile(
         dialogTitle: 'Save PNG Export',
         fileName: fileName,
         allowedExtensions: ['png'],
+        bytes: pngBytes,
       );
-    }
-
-    if (outputFile != null) {
-      await File(outputFile).writeAsBytes(pngBytes);
     }
   }
 

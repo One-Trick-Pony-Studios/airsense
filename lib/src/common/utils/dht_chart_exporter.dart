@@ -61,23 +61,21 @@ class DhtChartExporter {
     final pngBytes = byteData!.buffer.asUint8List();
 
     final fileName = 'dht-chart-export-${DateTime.now().millisecondsSinceEpoch}.png';
-    String? outputFile;
 
     if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
       final directory = await getApplicationDocumentsDirectory();
-      outputFile = p.join(directory.path, fileName);
+      final outputFile = p.join(directory.path, fileName);
+      await File(outputFile).writeAsBytes(pngBytes);
     } else {
-      outputFile = await FilePicker.saveFile(
+      await FilePicker.saveFile(
         dialogTitle: 'Save DHT11 Chart PNG',
         fileName: fileName,
         allowedExtensions: ['png'],
+        bytes: pngBytes,
       );
     }
-
-    if (outputFile != null) {
-      await File(outputFile).writeAsBytes(pngBytes);
-    }
   }
+
 
   static void _drawDhtChartOnCanvas(
       Canvas canvas, Size size, List<DhtData> data) {

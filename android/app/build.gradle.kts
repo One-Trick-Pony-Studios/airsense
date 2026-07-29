@@ -1,7 +1,7 @@
 plugins {
     id("com.android.application")
-    id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // kotlin-android is no longer applied here; Flutter injects it via
+    // the built-in Kotlin support (android.builtInKotlin=true in gradle.properties).
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -16,7 +16,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = "11"
     }
 
     defaultConfig {
@@ -35,6 +35,16 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
+    applicationVariants.all {
+        outputs.all {
+            val apkOutput = this as? com.android.build.gradle.api.ApkVariantOutput
+            if (apkOutput != null) {
+                val isRelease = name.contains("release", ignoreCase = true)
+                apkOutput.outputFileName = if (isRelease) "airsense.apk" else "airsense-debug.apk"
+            }
         }
     }
 }

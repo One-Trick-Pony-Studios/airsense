@@ -7,10 +7,10 @@ import 'package:window_manager/window_manager.dart';
 import '../app/providers.dart';
 import '../app/dht_providers.dart';
 import '../domain/device_type.dart';
+import '../theme/app_theme.dart';
 import 'history_screen.dart';
 import 'nova_sensor_screen.dart';
 import 'dht11_sensor_screen.dart';
-
 
 /// Provider that holds the currently selected device type.
 /// Lives at the UI layer since it's purely a navigation/display concern.
@@ -25,7 +25,6 @@ class _SelectedDeviceNotifier extends Notifier<DeviceType?> {
   void select(DeviceType device) => state = device;
   void clear() => state = null;
 }
-
 
 /// Root shell that shows the welcome/device-selector and hosts the
 /// per-device sensor screens inside a consistent AppBar.
@@ -46,14 +45,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _checkAlwaysOnBottom() async {
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    if (!kIsWeb &&
+        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       final isPinned = await windowManager.isAlwaysOnBottom();
       if (mounted) setState(() => _isAlwaysOnBottom = isPinned);
     }
   }
 
   Future<void> _toggleAlwaysOnBottom() async {
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    if (!kIsWeb &&
+        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       final next = !_isAlwaysOnBottom;
       await windowManager.setAlwaysOnBottom(next);
       await windowManager.setSkipTaskbar(next);
@@ -61,9 +62,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  String _appBarTitle(DeviceType? device) {
-    if (device == null) return 'AirSense';
-    return 'AirSense · ${device.shortName}';
+  /// Implicitly disconnects the active COM port and clears device selection.
+  void _navigateBackToWelcome(WidgetRef ref, DeviceType currentDevice) {
+    if (currentDevice == DeviceType.nova) {
+      ref.read(sensorStateProvider.notifier).disconnect();
+    } else if (currentDevice == DeviceType.dht11) {
+      ref.read(dhtStateProvider.notifier).disconnect();
+    }
+    ref.read(selectedDeviceProvider.notifier).clear();
   }
 
   @override
@@ -75,74 +81,100 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ref.watch(sensorStateProvider.select((s) => s.errorMessage));
     final dhtError =
         ref.watch(dhtStateProvider.select((s) => s.errorMessage));
-    final errorMessage = selectedDevice == DeviceType.dht11 ? dhtError : novaError;
+    final errorMessage =
+        selectedDevice == DeviceType.dht11 ? dhtError : novaError;
 
-    return Scaffold(
-      appBar: AppBar(
-        flexibleSpace:
-            (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS))
-                ? const DragToMoveArea(child: SizedBox.expand())
-                : null,
-        title: Text(_appBarTitle(selectedDevice)),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history),
-            tooltip: 'Recordings',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const HistoryScreen()),
-            ),
+    return PopScope(
+      canPop: selectedDevice == null,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && selectedDevice != null) {
+          _navigateBackToWelcome(ref, selectedDevice);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          centerTitle: true,
+          leading: selectedDevice != null
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Back to Menu',
+                  onPressed: () =>
+                      _navigateBackToWelcome(ref, selectedDevice),
+                )
+              : null,
+          flexibleSpace: (!kIsWeb &&
+                  (Platform.isWindows || Platform.isLinux || Platform.isMacOS))
+              ? const DragToMoveArea(child: SizedBox.expand())
+              : null,
+          title: Text(
+            selectedDevice == null ? 'AirSense' : selectedDevice.displayName,
+            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
           ),
-          if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) ...[
+          actions: [
             IconButton(
-              icon: Icon(
-                  _isAlwaysOnBottom ? Icons.layers_clear : Icons.layers),
-              tooltip: _isAlwaysOnBottom
-                  ? 'Detach from desktop'
-                  : 'Pin to desktop',
-              onPressed: _toggleAlwaysOnBottom,
+              icon: const Icon(Icons.history),
+              tooltip: 'Recordings',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const HistoryScreen()),
+              ),
             ),
-            IconButton(
-              icon: const Icon(Icons.close),
-              tooltip: 'Close',
-              onPressed: () async => await windowManager.close(),
+            if (!kIsWeb &&
+                (Platform.isWindows ||
+                    Platform.isLinux ||
+                    Platform.isMacOS)) ...[
+              IconButton(
+                icon: Icon(
+                    _isAlwaysOnBottom ? Icons.layers_clear : Icons.layers),
+                tooltip: _isAlwaysOnBottom
+                    ? 'Detach from desktop'
+                    : 'Pin to desktop',
+                onPressed: _toggleAlwaysOnBottom,
+              ),
+              IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Close',
+                onPressed: () async => await windowManager.close(),
+              ),
+            ],
+          ],
+        ),
+        body: Container(
+          decoration: AppTheme.skyGradientDecoration,
+          child: Column(
+            children: [
+            if (errorMessage != null)
+              MaterialBanner(
+                content: Text(errorMessage),
+                backgroundColor:
+                    Theme.of(context).colorScheme.errorContainer,
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      if (selectedDevice == DeviceType.dht11) {
+                        ref.read(dhtStateProvider.notifier).clearError();
+                      } else {
+                        ref.read(sensorStateProvider.notifier).clearError();
+                      }
+                    },
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: selectedDevice == null
+                    ? const _WelcomeView()
+                    : selectedDevice == DeviceType.nova
+                        ? const NovaSensorScreen()
+                        : const Dht11SensorScreen(),
+              ),
             ),
           ],
-        ],
+        ),
       ),
-      body: Column(
-        children: [
-          if (errorMessage != null)
-            MaterialBanner(
-              content: Text(errorMessage),
-              backgroundColor:
-                  Theme.of(context).colorScheme.errorContainer,
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    if (selectedDevice == DeviceType.dht11) {
-                      ref.read(dhtStateProvider.notifier).clearError();
-                    } else {
-                      ref.read(sensorStateProvider.notifier).clearError();
-                    }
-                  },
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: selectedDevice == null
-                  ? const _WelcomeView()
-                  : selectedDevice == DeviceType.nova
-                      ? const NovaSensorScreen()
-                      : const Dht11SensorScreen(),
-            ),
-          ),
-        ],
-      ),
+    ),
     );
   }
 }
@@ -164,8 +196,9 @@ class _WelcomeView extends ConsumerWidget {
           children: [
             // ── Logo ──────────────────────────────────────────────────────
             Container(
-              width: 120,
-              height: 120,
+              width: 130,
+              height: 130,
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
@@ -182,10 +215,16 @@ class _WelcomeView extends ConsumerWidget {
                   ),
                 ],
               ),
-              child: Icon(
-                Icons.air,
-                size: 64,
-                color: colorScheme.onPrimaryContainer,
+              child: ClipOval(
+                child: Image.asset(
+                  'airsense_reduced.png',
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.air,
+                    size: 64,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 24),

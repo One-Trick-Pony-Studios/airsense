@@ -13,7 +13,7 @@ extension DeviceTypeLabel on DeviceType {
       case DeviceType.nova:
         return 'Nova PM (SDS011)';
       case DeviceType.dht11:
-        return 'DHT11 via ESP01';
+        return 'DHT11 (ESP01)';
     }
   }
 

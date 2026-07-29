@@ -1,9 +1,13 @@
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
+
+import '../theme/app_theme.dart';
+import 'csv_viewer_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -26,7 +30,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     setState(() => _isLoading = true);
     final directory = await getApplicationDocumentsDirectory();
     final entities = await directory.list().toList();
-    
+
     // Filter for all app log/export files and sort by newest first
     final filteredFiles = entities.where((e) {
       final name = p.basename(e.path);
@@ -43,12 +47,31 @@ class _HistoryScreenState extends State<HistoryScreen> {
     });
   }
 
+  Future<void> _pickExternalCsv() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+    );
+
+    if (result != null && result.files.single.path != null) {
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              CsvViewerScreen(filePath: result.files.single.path!),
+        ),
+      );
+    }
+  }
+
   Future<void> _deleteFile(FileSystemEntity file) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete File?'),
-        content: Text('Are you sure you want to delete ${p.basename(file.path)}?'),
+        content:
+            Text('Are you sure you want to delete ${p.basename(file.path)}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -76,15 +99,36 @@ class _HistoryScreenState extends State<HistoryScreen> {
         title: const Text('Recordings & Exports'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.file_open),
+            tooltip: 'Open CSV File',
+            onPressed: _pickExternalCsv,
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
             onPressed: _loadFiles,
           ),
         ],
       ),
-      body: _isLoading
+      body: Container(
+        decoration: AppTheme.skyGradientDecoration,
+        child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _files.isEmpty
-              ? const Center(child: Text('No saved files found.'))
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('No saved files found.'),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        onPressed: _pickExternalCsv,
+                        icon: const Icon(Icons.file_open),
+                        label: const Text('Open External CSV File'),
+                      ),
+                    ],
+                  ),
+                )
               : ListView.builder(
                   itemCount: _files.length,
                   itemBuilder: (context, index) {
@@ -92,10 +136,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     final stat = file.statSync();
                     final name = p.basename(file.path);
                     final isCsv = name.endsWith('.csv');
-                    
+
                     return ListTile(
                       leading: Icon(
-                        isCsv ? Icons.description : Icons.image,
+                        isCsv ? Icons.show_chart : Icons.image,
                         color: isCsv ? Colors.blue : Colors.green,
                       ),
                       title: Text(name),
@@ -117,18 +161,27 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ],
                       ),
                       onTap: () {
-                         if (!isCsv) {
-                           showDialog(
-                             context: context,
-                             builder: (context) => Dialog(
-                               child: Image.file(File(file.path)),
-                             ),
-                           );
-                         }
+                        if (isCsv) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  CsvViewerScreen(filePath: file.path),
+                            ),
+                          );
+                        } else {
+                          showDialog(
+                            context: context,
+                            builder: (context) => Dialog(
+                              child: Image.file(File(file.path)),
+                            ),
+                          );
+                        }
                       },
                     );
                   },
                 ),
+      ),
     );
   }
 }

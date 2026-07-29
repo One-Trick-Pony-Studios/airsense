@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -173,82 +173,73 @@ class DhtStateNotifier extends Notifier<DhtAppState> {
   Future<void> _startRecording() async {
     final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
     final fileName = 'dht11-log-$timestamp.csv';
-    String? outputFile;
 
-    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-      final directory = await getApplicationDocumentsDirectory();
-      outputFile = p.join(directory.path, fileName);
-    } else {
-      outputFile = await FilePicker.saveFile(
-        dialogTitle: 'Please select an output file:',
-        fileName: fileName,
-        allowedExtensions: ['csv'],
-      );
-    }
+    // Always write to the app documents directory; users export via the
+    // History screen. (file_picker 12 requires bytes at save time, which is
+    // incompatible with streaming IOSink writes.)
+    final directory = await getApplicationDocumentsDirectory();
+    final outputFile = p.join(directory.path, fileName);
 
-    if (outputFile != null) {
-      double? lat;
-      double? lon;
-      String? locationName;
+    double? lat;
+    double? lon;
+    String? locationName;
 
-      if (state.locationEnabled) {
+    if (state.locationEnabled) {
+      try {
+        final position = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 5),
+        ));
+        lat = position.latitude;
+        lon = position.longitude;
+
         try {
-          final position = await Geolocator.getCurrentPosition(
-              locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            timeLimit: Duration(seconds: 5),
-          ));
-          lat = position.latitude;
-          lon = position.longitude;
-
-          try {
-            List<Placemark> placemarks =
-                await placemarkFromCoordinates(lat, lon)
-                    .timeout(const Duration(seconds: 3));
-            if (placemarks.isNotEmpty) {
-              final place = placemarks.first;
-              final List<String> addressParts = [];
-              if (place.subLocality != null &&
-                  place.subLocality!.isNotEmpty) {
-                addressParts.add(place.subLocality!);
-              }
-              if (place.locality != null && place.locality!.isNotEmpty) {
-                if (!addressParts.contains(place.locality)) {
-                  addressParts.add(place.locality!);
-                }
-              }
-              locationName = addressParts.isEmpty
-                  ? place.street ?? 'Unknown Location'
-                  : addressParts.join(', ');
+          final placemarks = await Geocoding()
+              .placemarkFromCoordinates(lat, lon)
+              .timeout(const Duration(seconds: 3));
+          if (placemarks.isNotEmpty) {
+            final place = placemarks.first;
+            final addressParts = <String>[];
+            if (place.subLocality != null && place.subLocality!.isNotEmpty) {
+              addressParts.add(place.subLocality!);
             }
-          } catch (e) {
-            debugPrint('Error reverse geocoding: $e');
-            locationName = 'Unknown Location';
+            if (place.locality != null && place.locality!.isNotEmpty) {
+              if (!addressParts.contains(place.locality)) {
+                addressParts.add(place.locality!);
+              }
+            }
+            locationName = addressParts.isEmpty
+                ? place.street ?? 'Unknown Location'
+                : addressParts.join(', ');
           }
         } catch (e) {
-          debugPrint('Error getting starting location: $e');
+          debugPrint('Error reverse geocoding: $e');
+          locationName = 'Unknown Location';
         }
-      }
-
-      try {
-        final file = File(outputFile);
-        _fileSink = file.openWrite();
-        _fileSink?.writeln(
-            'timestamp,temperature_c,relative_humidity,latitude,longitude,location_name');
-        state = state.copyWith(
-          isRecording: true,
-          activeRecordFilePath: outputFile,
-          recordingLat: lat,
-          recordingLon: lon,
-          recordingLocationName: locationName,
-          clearError: true,
-        );
       } catch (e) {
-        state = state.copyWith(
-          errorMessage: 'Failed to create file: $e',
-          isRecording: false,
-        );
+        debugPrint('Error getting starting location: $e');
       }
+    }
+
+    try {
+      final file = File(outputFile);
+      _fileSink = file.openWrite();
+      _fileSink?.writeln(
+          'timestamp,temperature_c,relative_humidity,latitude,longitude,location_name');
+      state = state.copyWith(
+        isRecording: true,
+        activeRecordFilePath: outputFile,
+        recordingLat: lat,
+        recordingLon: lon,
+        recordingLocationName: locationName,
+        clearError: true,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        errorMessage: 'Failed to create file: $e',
+        isRecording: false,
+      );
     }
   }
 
