@@ -17,7 +17,7 @@ class DesktopSensorRepository implements SensorRepository {
   }
 
   @override
-  Future<void> connect(String portName) async {
+  Future<void> connect(String portName, {int baudRate = 9600}) async {
     if (_port != null && _port!.isOpen) {
       if (_port!.name == portName) return; // Already connected
       await disconnect();
@@ -30,7 +30,7 @@ class DesktopSensorRepository implements SensorRepository {
       }
 
       final config = _port!.config;
-      config.baudRate = 9600;
+      config.baudRate = baudRate;
       config.bits = 8;
       config.parity = SerialPortParity.none;
       config.stopBits = 1;

@@ -1,10 +1,10 @@
 import 'package:flutter/foundation.dart';
 
-import '../domain/sensor_data.dart';
+import '../domain/dht_data.dart';
 
 @immutable
-class AppState {
-  const AppState({
+class DhtAppState {
+  const DhtAppState({
     this.currentReading,
     this.uiRingBuffer = const [],
     this.isRecording = false,
@@ -16,11 +16,11 @@ class AppState {
     this.recordingLat,
     this.recordingLon,
     this.recordingLocationName,
-    this.selectedBaudRate = 9600,
+    this.selectedBaudRate = 115200,
   });
 
-  final SensorData? currentReading;
-  final List<SensorData> uiRingBuffer;
+  final DhtData? currentReading;
+  final List<DhtData> uiRingBuffer;
   final bool isRecording;
   final String? activeRecordFilePath;
   final bool isConnected;
@@ -32,9 +32,9 @@ class AppState {
   final String? recordingLocationName;
   final int selectedBaudRate;
 
-  AppState copyWith({
-    SensorData? currentReading,
-    List<SensorData>? uiRingBuffer,
+  DhtAppState copyWith({
+    DhtData? currentReading,
+    List<DhtData>? uiRingBuffer,
     bool? isRecording,
     String? activeRecordFilePath,
     bool? isConnected,
@@ -50,7 +50,7 @@ class AppState {
     bool clearError = false,
     bool clearRecordingLocation = false,
   }) {
-    return AppState(
+    return DhtAppState(
       currentReading: currentReading ?? this.currentReading,
       uiRingBuffer: uiRingBuffer ?? this.uiRingBuffer,
       isRecording: isRecording ?? this.isRecording,

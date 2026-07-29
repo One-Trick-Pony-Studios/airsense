@@ -14,7 +14,7 @@ class MockSensorRepository implements SensorRepository {
   Stream<Uint8List> get rawDataStream => _controller.stream;
 
   @override
-  Future<void> connect(String portName) async {
+  Future<void> connect(String portName, {int baudRate = 9600}) async {
     if (_timer?.isActive ?? false) {
       return;
     }

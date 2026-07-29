@@ -18,7 +18,7 @@ class MobileSensorRepository implements SensorRepository {
   }
 
   @override
-  Future<void> connect(String portName) async {
+  Future<void> connect(String portName, {int baudRate = 9600}) async {
     if (_port != null) {
       await disconnect();
     }
@@ -38,7 +38,7 @@ class MobileSensorRepository implements SensorRepository {
       await _port!.setDTR(true);
       await _port!.setRTS(true);
       await _port!.setPortParameters(
-          9600, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
+          baudRate, UsbPort.DATABITS_8, UsbPort.STOPBITS_1, UsbPort.PARITY_NONE);
 
       _controller ??= StreamController<Uint8List>.broadcast();
       _subscription = _port!.inputStream?.listen((data) {

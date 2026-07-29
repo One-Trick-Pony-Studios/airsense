@@ -27,10 +27,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final directory = await getApplicationDocumentsDirectory();
     final entities = await directory.list().toList();
     
-    // Filter for our app's files and sort by newest first
+    // Filter for all app log/export files and sort by newest first
     final filteredFiles = entities.where((e) {
       final name = p.basename(e.path);
-      return name.startsWith('sds011-log-') || name.startsWith('chart-export-');
+      return name.startsWith('sds011-log-') ||
+          name.startsWith('chart-export-') ||
+          name.startsWith('dht11-log-') ||
+          name.startsWith('dht-chart-export-');
     }).toList()
       ..sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
 

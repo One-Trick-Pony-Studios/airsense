@@ -8,22 +8,26 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+
 import '../data/repositories/desktop_sensor_repository.dart';
-import '../data/repositories/mock_sensor_repository.dart';
+import '../data/repositories/mock_dht11_sensor_repository.dart';
 import '../data/repositories/mobile_sensor_repository.dart';
 import '../data/repositories/sensor_repository.dart';
-import '../domain/sensor_data.dart';
-import '../common/utils/sds011_parser.dart';
+import '../domain/dht_data.dart';
+import '../common/utils/dht11_parser.dart';
 
-import 'app_state.dart';
+import 'dht_app_state.dart';
 
-const bool useMockData = false; // Set to true to test UI without a sensor
+// Set to true to use mock DHT11 data during development
+const bool useDhtMockData = false;
 
-final sensorRepositoryProvider = Provider<SensorRepository>((ref) {
+final dhtSensorRepositoryProvider = Provider<SensorRepository>((ref) {
   final SensorRepository repo;
-  if (useMockData) {
-    repo = MockSensorRepository();
+  if (useDhtMockData) {
+    repo = MockDht11SensorRepository();
   } else if (!kIsWeb && Platform.isAndroid) {
+    // Re-use the same underlying USB-serial infrastructure; the parser
+    // is what differentiates the two devices.
     repo = MobileSensorRepository();
   } else {
     repo = DesktopSensorRepository();
@@ -32,24 +36,24 @@ final sensorRepositoryProvider = Provider<SensorRepository>((ref) {
   return repo;
 });
 
-final availablePortsProvider = FutureProvider<List<String>>((ref) async {
-  return ref.watch(sensorRepositoryProvider).getAvailablePorts();
+final dhtAvailablePortsProvider = FutureProvider<List<String>>((ref) async {
+  return ref.watch(dhtSensorRepositoryProvider).getAvailablePorts();
 });
 
-final parsedSensorStreamProvider = StreamProvider<SensorData>((ref) {
-  final repository = ref.watch(sensorRepositoryProvider);
-  return repository.rawDataStream.transform(Sds011Parser().transformer);
+final parsedDhtStreamProvider = StreamProvider<DhtData>((ref) {
+  final repository = ref.watch(dhtSensorRepositoryProvider);
+  return repository.rawDataStream.transform(Dht11Parser().transformer);
 });
 
-final sensorStateProvider =
-    NotifierProvider<SensorStateNotifier, AppState>(SensorStateNotifier.new);
+final dhtStateProvider =
+    NotifierProvider<DhtStateNotifier, DhtAppState>(DhtStateNotifier.new);
 
-class SensorStateNotifier extends Notifier<AppState> {
+class DhtStateNotifier extends Notifier<DhtAppState> {
   IOSink? _fileSink;
 
   @override
-  AppState build() {
-    ref.listen<AsyncValue<SensorData>>(parsedSensorStreamProvider,
+  DhtAppState build() {
+    ref.listen<AsyncValue<DhtData>>(parsedDhtStreamProvider,
         (previous, next) async {
       if (next.hasValue && next.value != null) {
         await _onNewSensorData(next.value!);
@@ -60,17 +64,17 @@ class SensorStateNotifier extends Notifier<AppState> {
       _fileSink?.close();
     });
 
-    return const AppState();
+    return const DhtAppState();
   }
 
-  Future<void> _onNewSensorData(SensorData data) async {
-    SensorData updatedData = data;
+  Future<void> _onNewSensorData(DhtData data) async {
+    DhtData updatedData = data;
     if (state.isRecording &&
         state.recordingLat != null &&
         state.recordingLon != null) {
-      updatedData = SensorData(
-        pm25: data.pm25,
-        pm10: data.pm10,
+      updatedData = DhtData(
+        temperatureCelsius: data.temperatureCelsius,
+        relativeHumidity: data.relativeHumidity,
         timestamp: data.timestamp,
         latitude: state.recordingLat,
         longitude: state.recordingLon,
@@ -78,7 +82,7 @@ class SensorStateNotifier extends Notifier<AppState> {
       );
     }
 
-    final newBuffer = List<SensorData>.from(state.uiRingBuffer);
+    final newBuffer = List<DhtData>.from(state.uiRingBuffer);
     if (newBuffer.length >= 300) {
       newBuffer.removeAt(0);
     }
@@ -94,7 +98,7 @@ class SensorStateNotifier extends Notifier<AppState> {
       final lon = updatedData.longitude?.toString() ?? '';
       final loc = updatedData.locationName ?? '';
       _fileSink?.writeln(
-          '${updatedData.timestamp.toIso8601String()},${updatedData.pm25},${updatedData.pm10},$lat,$lon,$loc');
+          '${updatedData.timestamp.toIso8601String()},${updatedData.temperatureCelsius},${updatedData.relativeHumidity},$lat,$lon,$loc');
     }
   }
 
@@ -102,7 +106,7 @@ class SensorStateNotifier extends Notifier<AppState> {
     state = state.copyWith(clearError: true);
     try {
       await ref
-          .read(sensorRepositoryProvider)
+          .read(dhtSensorRepositoryProvider)
           .connect(port, baudRate: state.selectedBaudRate);
       state = state.copyWith(isConnected: true, connectedPort: port);
     } catch (e) {
@@ -114,7 +118,7 @@ class SensorStateNotifier extends Notifier<AppState> {
   }
 
   Future<void> disconnect() async {
-    await ref.read(sensorRepositoryProvider).disconnect();
+    await ref.read(dhtSensorRepositoryProvider).disconnect();
     state = state.copyWith(
       isConnected: false,
       clearConnectedPort: true,
@@ -168,11 +172,10 @@ class SensorStateNotifier extends Notifier<AppState> {
 
   Future<void> _startRecording() async {
     final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-    final fileName = 'sds011-log-$timestamp.csv';
+    final fileName = 'dht11-log-$timestamp.csv';
     String? outputFile;
 
     if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-      // Use internal app documents directory for maximum reliability on mobile
       final directory = await getApplicationDocumentsDirectory();
       outputFile = p.join(directory.path, fileName);
     } else {
@@ -198,7 +201,6 @@ class SensorStateNotifier extends Notifier<AppState> {
           lat = position.latitude;
           lon = position.longitude;
 
-          // Reverse geocode to get a human-readable name
           try {
             List<Placemark> placemarks =
                 await placemarkFromCoordinates(lat, lon)
@@ -206,42 +208,22 @@ class SensorStateNotifier extends Notifier<AppState> {
             if (placemarks.isNotEmpty) {
               final place = placemarks.first;
               final List<String> addressParts = [];
-
-              if (place.subLocality != null && place.subLocality!.isNotEmpty) {
+              if (place.subLocality != null &&
+                  place.subLocality!.isNotEmpty) {
                 addressParts.add(place.subLocality!);
               }
-
               if (place.locality != null && place.locality!.isNotEmpty) {
                 if (!addressParts.contains(place.locality)) {
                   addressParts.add(place.locality!);
                 }
               }
-
-              if (addressParts.length < 2 &&
-                  place.subAdministrativeArea != null &&
-                  place.subAdministrativeArea!.isNotEmpty) {
-                if (!addressParts.contains(place.subAdministrativeArea)) {
-                  addressParts.add(place.subAdministrativeArea!);
-                }
-              }
-
-              if (addressParts.length < 2 &&
-                  place.administrativeArea != null &&
-                  place.administrativeArea!.isNotEmpty) {
-                if (!addressParts.contains(place.administrativeArea)) {
-                  addressParts.add(place.administrativeArea!);
-                }
-              }
-
-              if (addressParts.isEmpty) {
-                locationName = place.street ?? "Unknown Location";
-              } else {
-                locationName = addressParts.join(", ");
-              }
+              locationName = addressParts.isEmpty
+                  ? place.street ?? 'Unknown Location'
+                  : addressParts.join(', ');
             }
           } catch (e) {
             debugPrint('Error reverse geocoding: $e');
-            locationName = "Unknown Location";
+            locationName = 'Unknown Location';
           }
         } catch (e) {
           debugPrint('Error getting starting location: $e');
@@ -252,7 +234,7 @@ class SensorStateNotifier extends Notifier<AppState> {
         final file = File(outputFile);
         _fileSink = file.openWrite();
         _fileSink?.writeln(
-            'timestamp,pm25,pm10,latitude,longitude,location_name'); // Write header
+            'timestamp,temperature_c,relative_humidity,latitude,longitude,location_name');
         state = state.copyWith(
           isRecording: true,
           activeRecordFilePath: outputFile,
